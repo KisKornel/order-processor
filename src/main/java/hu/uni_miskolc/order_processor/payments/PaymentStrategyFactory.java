@@ -1,36 +1,44 @@
 package hu.uni_miskolc.order_processor.payments;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
 import java.util.Map;
-import java.util.Set;
 
 @Component
 public class PaymentStrategyFactory {
+    private static final Logger log = LoggerFactory.getLogger(PaymentStrategyFactory.class);
+
     private final Map<PaymentMethod, PaymentStrategy> strategies;
 
     public PaymentStrategyFactory(Map<String, PaymentStrategy> strategyBeans) {
-        Map<PaymentMethod, PaymentStrategy> tmp = new EnumMap<>(PaymentMethod.class);
+        EnumMap<PaymentMethod, PaymentStrategy> tmp = new EnumMap<>(PaymentMethod.class);
+
         for (var entry : strategyBeans.entrySet()) {
+            String beanName = entry.getKey();
+            PaymentStrategy bean = entry.getValue();
+
             try {
-                PaymentMethod pm = PaymentMethod.fromString(entry.getKey());
-                tmp.put(pm, entry.getValue());
+                PaymentMethod pm = PaymentMethod.fromString(beanName);
+                if (tmp.containsKey(pm)) {
+                    throw new IllegalStateException("Duplicate PaymentStrategy for " + pm +
+                            " (bean '" + beanName + "' vs existing '" + tmp.get(pm).getClass().getName() + "')");
+                }
+                tmp.put(pm, bean);
+                log.info("Registered payment strategy for {} -> bean='{}' ({})", pm, beanName, bean.getClass().getName());
             } catch (IllegalArgumentException e) {
-                LoggerFactory.getLogger(getClass()).warn("No PaymentStrategy for {}", entry.getKey());
+                log.warn("Skipping bean '{}' : cannot map bean name to PaymentMethod", beanName);
             }
         }
+
         this.strategies = Map.copyOf(tmp);
     }
 
     public PaymentStrategy get(PaymentMethod method) {
-        PaymentStrategy s = strategies.get(method);
+        var s = strategies.get(method);
         if (s == null) throw new IllegalArgumentException("No PaymentStrategy for " + method);
         return s;
-    }
-
-    public Set<PaymentMethod> supportedMethods() {
-        return strategies.keySet();
     }
 }
