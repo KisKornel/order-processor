@@ -15,7 +15,6 @@ public class LimitValidator extends AbstractValidator<Order> {
         if (order.getItems().size() > LIMIT) {
                 throw new ValidationException("Product limit max 5");
         }
-
         return callNext(order);
     }
 }

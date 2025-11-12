@@ -8,9 +8,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentDetails {
+    private String name;
     private String cardNumber;
     private String expiry;
     private String cvv;
-    private String paypalId;
 }
 

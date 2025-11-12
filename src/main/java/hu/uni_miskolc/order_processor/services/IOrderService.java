@@ -10,4 +10,5 @@ public interface IOrderService {
     Order placeOrder(OrderRequest req) throws ValidationException;
     List<Order> getAllOrders();
     Order getOrderById(String id);
+    Order updateOrderStatus(String orderId, String status);
 }

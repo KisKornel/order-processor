@@ -2,8 +2,9 @@ package hu.uni_miskolc.order_processor.controllers;
 
 import hu.uni_miskolc.order_processor.dtos.OrderRequest;
 import hu.uni_miskolc.order_processor.dtos.OrderResponse;
+import hu.uni_miskolc.order_processor.dtos.OrderStatus;
+import hu.uni_miskolc.order_processor.dtos.UpdateOrderStatusRequest;
 import hu.uni_miskolc.order_processor.entities.Order;
-import hu.uni_miskolc.order_processor.exceptions.ValidationException;
 import hu.uni_miskolc.order_processor.services.OrderService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,15 +22,13 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest req) {
         try {
-            if (req.getPaymentMethod() == null) {
-                return ResponseEntity.badRequest().body(new OrderResponse(null, "ERROR", "Missing paymentMethod"));
+            if (req.getPaymentType() == null) {
+                return ResponseEntity.badRequest().body(new OrderResponse(null, OrderStatus.CANCELED, "Missing paymentMethod"));
             }
             Order order = orderService.placeOrder(req);
-            return  ResponseEntity.ok(new OrderResponse(order.getId(), "OK", "Order placed"));
-        } catch (ValidationException | IllegalArgumentException ve) {
-            return ResponseEntity.badRequest().body(new OrderResponse(null, "VALIDATION_FAILED", ve.getMessage()));
+            return  ResponseEntity.ok(new OrderResponse(order.getId(), order.getStatus(), "Order placed"));
         } catch (Exception ex) {
-            return ResponseEntity.badRequest().body(new OrderResponse(null, "ERROR", ex.getMessage()));
+            return ResponseEntity.badRequest().body(new OrderResponse(null, OrderStatus.CANCELED, ex.getMessage()));
         }
     }
 
@@ -48,5 +47,17 @@ public class OrderController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(new OrderResponse(order.getId(), order.getStatus(), "Order placed"));
+    }
+
+    @PutMapping("/update/{orderId}")
+    public ResponseEntity<OrderResponse> updateOrderStatus(
+            @PathVariable String orderId,
+            @RequestBody UpdateOrderStatusRequest request) {
+
+        if (orderId.isEmpty() || request == null || request.status() == null || request.status().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        Order order = orderService.updateOrderStatus(orderId, request.status());
+        return ResponseEntity.ok(new OrderResponse(order.getId(), order.getStatus(), "Order status changed!"));
     }
 }

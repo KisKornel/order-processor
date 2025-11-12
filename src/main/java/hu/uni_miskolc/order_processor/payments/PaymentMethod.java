@@ -1,25 +1,8 @@
 package hu.uni_miskolc.order_processor.payments;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonValue;
+import hu.uni_miskolc.order_processor.dtos.PaymentDetails;
+import hu.uni_miskolc.order_processor.entities.Order;
 
-public enum PaymentMethod {
-    CREDIT_CARD,
-    PAYPAL,
-    INVOICE;
-
-    @JsonCreator
-    public static PaymentMethod fromString(String key) {
-        if (key == null) return null;
-        String normalized = key.trim()
-                .replace('-', '_')
-                .replace(' ', '_')
-                .toUpperCase();
-        return PaymentMethod.valueOf(normalized);
-    }
-
-    @JsonValue
-    public String toValue() {
-        return this.name();
-    }
+public interface PaymentMethod {
+    PaymentResult pay(Order order, PaymentDetails details);
 }

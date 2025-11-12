@@ -1,44 +1,44 @@
 package hu.uni_miskolc.order_processor.services;
 
 import hu.uni_miskolc.order_processor.dtos.OrderRequest;
+import hu.uni_miskolc.order_processor.dtos.OrderStatus;
 import hu.uni_miskolc.order_processor.entities.Order;
 import hu.uni_miskolc.order_processor.entities.OrderItem;
-import hu.uni_miskolc.order_processor.events.OrderPlacedEvent;
+import hu.uni_miskolc.order_processor.entities.Product;
+import hu.uni_miskolc.order_processor.events.CustomSpringEventPublisher;
 import hu.uni_miskolc.order_processor.exceptions.ValidationException;
 import hu.uni_miskolc.order_processor.payments.PaymentMethod;
 import hu.uni_miskolc.order_processor.payments.PaymentResult;
-import hu.uni_miskolc.order_processor.payments.PaymentStrategy;
-import hu.uni_miskolc.order_processor.payments.PaymentStrategyFactory;
+import hu.uni_miskolc.order_processor.payments.PaymentMethodFactory;
 import hu.uni_miskolc.order_processor.repositories.OrderRepository;
 import hu.uni_miskolc.order_processor.repositories.ProductRepository;
 import hu.uni_miskolc.order_processor.validations.FraudValidator;
 import hu.uni_miskolc.order_processor.validations.InventoryValidator;
 import hu.uni_miskolc.order_processor.validations.LimitValidator;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.AllArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @AllArgsConstructor
 @Service
 public class OrderService implements IOrderService{
-    private final ApplicationEventPublisher publisher;
-    private final Map<String, PaymentStrategy> paymentStrategies;
+    private final CustomSpringEventPublisher customSpringEventPublisher;
     private final InventoryValidator inventoryValidator;
     private final FraudValidator fraudValidator;
     private final LimitValidator limitValidator;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
-    private final PaymentStrategyFactory paymentFactory;
+    private final PaymentMethodFactory paymentMethodFactory;
 
+    @Override
     @Transactional
     public Order placeOrder(OrderRequest req) throws ValidationException {
         List<OrderItem> items = req.getItems().stream().map(i -> {
-            var p = productRepository.findById(i.getProductId()).orElseThrow(() -> new RuntimeException("Product not found: " + i.getProductId()));
+            var p = productRepository.findById(i.getProductId()).orElseThrow(() -> new EntityNotFoundException("Product not found: " + i.getProductId()));
             return OrderItem.builder()
                     .productId(i.getProductId())
                     .quantity(i.getQuantity())
@@ -46,40 +46,35 @@ public class OrderService implements IOrderService{
                     .build();
         }).toList();
 
-        PaymentMethod method = req.getPaymentMethod();
-        PaymentStrategy strategy = paymentFactory.get(method);
-
         String orderId = UUID.randomUUID().toString();
-        Order order = Order.of(orderId, req.getUserId(), method, items);
+        Order order = Order.of(orderId, req.getUserId(), OrderStatus.CREATED, req.getPaymentType(), items);
 
-        // --- CoR: assemble chain ---
+        // --- CoR ---
         inventoryValidator.setNext(fraudValidator);
         fraudValidator.setNext(limitValidator);
-
-        // validate (throws ValidationException if invalid)
         inventoryValidator.validate(order);
 
         // --- Strategy: payment ---
+        PaymentMethod strategy = paymentMethodFactory.get(req.getPaymentType());
         PaymentResult result = strategy.pay(order, req.getPaymentDetails());
+
         if (!result.isSuccess()) throw new RuntimeException("Payment failed: " + result.getMessage());
 
-        // --- reserve stock using pessimistic locking inside the same transaction ---
         for (OrderItem item : items) {
-            var pOpt = productRepository.findByIdForUpdate(item.getProductId());
-            var p = pOpt.orElseThrow(() -> new RuntimeException("Product not found: " + item.getProductId()));
-            if (p.getStock() < item.getQuantity()) {
-                throw new RuntimeException("Not enough stock for " + p.getId());
+            Product product = productRepository.findByIdForUpdate(item.getProductId()).orElseThrow(() -> new EntityNotFoundException("Product not found with " + item.getProductId() + " id"));
+            if (product.getStock() < item.getQuantity()) {
+                throw new RuntimeException("Not enough stock for " + product.getId());
             }
-            p.setStock(p.getStock() - item.getQuantity());
-            productRepository.save(p);
+            product.setStock(product.getStock() - item.getQuantity());
+            productRepository.save(product);
         }
 
-        // save order
-        order.setStatus("PLACED");
+        order.setTransactionId(result.getTransactionId());
+        order.setStatus(OrderStatus.PROCESSING);
         orderRepository.save(order);
 
         // publish event (Observer)
-        publisher.publishEvent(new OrderPlacedEvent(this, order, result.getTransactionId()));
+        customSpringEventPublisher.publishOrderEvent(order, result.getTransactionId(), OrderStatus.PROCESSING);
 
         return order;
     }
@@ -92,5 +87,16 @@ public class OrderService implements IOrderService{
     @Override
     public Order getOrderById(String id) {
         return orderRepository.findById(id).orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public Order updateOrderStatus(String orderId, String newStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+        order.setStatus(newStatus);
+
+        customSpringEventPublisher.publishOrderEvent(order, order.getTransactionId(), newStatus);
+        return order;
     }
 }
