@@ -1,4 +1,4 @@
-package hu.uni_miskolc.order_processor.payments;
+package hu.uni_miskolc.order_processor.constants;
 
 public class PaymentType {
     public static final String CREDIT_CARD = "CREDIT_CARD";

@@ -1,3 +1,13 @@
 package hu.uni_miskolc.order_processor.dtos;
 
-public record UpdateOrderStatusRequest(String status) { }
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateOrderStatusRequest {
+    private String orderId;
+    private String status;
+}

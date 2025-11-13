@@ -1,7 +1,7 @@
 package hu.uni_miskolc.order_processor.services;
 
 import hu.uni_miskolc.order_processor.dtos.OrderRequest;
-import hu.uni_miskolc.order_processor.dtos.OrderStatus;
+import hu.uni_miskolc.order_processor.constants.OrderStatus;
 import hu.uni_miskolc.order_processor.entities.Order;
 import hu.uni_miskolc.order_processor.entities.OrderItem;
 import hu.uni_miskolc.order_processor.entities.Product;
@@ -37,11 +37,11 @@ public class OrderService implements IOrderService{
     @Override
     @Transactional
     public Order placeOrder(OrderRequest req) throws ValidationException {
-        List<OrderItem> items = req.getItems().stream().map(i -> {
-            var p = productRepository.findById(i.getProductId()).orElseThrow(() -> new EntityNotFoundException("Product not found: " + i.getProductId()));
+        List<OrderItem> items = req.getItems().stream().map(item -> {
+            var p = productRepository.findById(item.getProductId()).orElseThrow(() -> new EntityNotFoundException("Product not found with " + item.getProductId() + " id"));
             return OrderItem.builder()
-                    .productId(i.getProductId())
-                    .quantity(i.getQuantity())
+                    .productId(item.getProductId())
+                    .quantity(item.getQuantity())
                     .price(p.getPrice())
                     .build();
         }).toList();

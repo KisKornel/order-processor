@@ -1,4 +1,4 @@
-package hu.uni_miskolc.order_processor.dtos;
+package hu.uni_miskolc.order_processor.constants;
 
 public class OrderStatus {
     public static final String CREATED = "CREATED";

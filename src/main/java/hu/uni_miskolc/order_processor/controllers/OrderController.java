@@ -2,7 +2,7 @@ package hu.uni_miskolc.order_processor.controllers;
 
 import hu.uni_miskolc.order_processor.dtos.OrderRequest;
 import hu.uni_miskolc.order_processor.dtos.OrderResponse;
-import hu.uni_miskolc.order_processor.dtos.OrderStatus;
+import hu.uni_miskolc.order_processor.constants.OrderStatus;
 import hu.uni_miskolc.order_processor.dtos.UpdateOrderStatusRequest;
 import hu.uni_miskolc.order_processor.entities.Order;
 import hu.uni_miskolc.order_processor.services.OrderService;
@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
 
 @RestController
 @AllArgsConstructor
@@ -49,15 +48,13 @@ public class OrderController {
         return ResponseEntity.ok(new OrderResponse(order.getId(), order.getStatus(), "Order placed"));
     }
 
-    @PutMapping("/update/{orderId}")
+    @PutMapping("/update")
     public ResponseEntity<OrderResponse> updateOrderStatus(
-            @PathVariable String orderId,
             @RequestBody UpdateOrderStatusRequest request) {
-
-        if (orderId.isEmpty() || request == null || request.status() == null || request.status().isBlank()) {
+        if (request == null || request.getOrderId().isBlank() || request.getStatus().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        Order order = orderService.updateOrderStatus(orderId, request.status());
+        Order order = orderService.updateOrderStatus(request.getOrderId(), request.getStatus());
         return ResponseEntity.ok(new OrderResponse(order.getId(), order.getStatus(), "Order status changed!"));
     }
 }
